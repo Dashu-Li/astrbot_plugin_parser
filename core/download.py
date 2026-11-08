@@ -1,4 +1,4 @@
-from asyncio import Task, TimeoutError, create_task, gather, sleep, to_thread
+from asyncio import CancelledError, Task, TimeoutError, create_task, gather, sleep, to_thread
 from collections.abc import Callable, Coroutine
 from functools import wraps
 from pathlib import Path
@@ -88,6 +88,7 @@ class Downloader:
         file_name: str | None = None,
         headers: dict[str, str] | None = None,
         proxy: str | None | object = ...,
+        retry_times: int | None = None,
     ) -> Path:
         """流式下载"""
         if not file_name:
@@ -97,7 +98,7 @@ class Downloader:
         if file_path.exists():
             return file_path
         headers = headers or self.default_headers
-        retries = self.cfg.download_retry_times
+        retries = self.cfg.download_retry_times if retry_times is None else max(0, int(retry_times))
         for attempt in range(retries + 1):
             try:
                 async with self.client.get(
@@ -139,6 +140,9 @@ class Downloader:
 
                 return file_path
             except (ZeroSizeException, SizeLimitException):
+                await safe_unlink(file_path)
+                raise
+            except CancelledError:
                 await safe_unlink(file_path)
                 raise
             except (ClientError, TimeoutError) as exc:
