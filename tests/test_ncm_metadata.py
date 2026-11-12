@@ -105,7 +105,7 @@ class NCMRepairTests(unittest.IsolatedAsyncioTestCase):
                 parser.create_author.assert_not_called()
 
     async def test_missing_or_invalid_playback_url_has_clear_error(self):
-        for url in (None, "", " ", 0, "file:///fixture.mp3"):
+        for url in (None, "", " ", 0, "file:///fixture.mp3", "https://", "http:///audio.mp3", "https://[", "https://example.invalid:invalid/audio", "https://user:password@example.invalid/audio", "https://example.invalid/a\n.mp3"):
             with self.subTest(url=url):
                 parser = self.harness(
                     {"songs": [self.song]}, {"data": [{"url": url}]}
@@ -113,3 +113,15 @@ class NCMRepairTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaisesRegex(ParseException, "未获取到播放地址"):
                     await self.parse_song(parser, self.match)
                 parser.create_video_content.assert_not_called()
+
+    async def test_http_failures_become_parse_errors_before_media_creation(self):
+        for stage in ("detail", "playback"):
+            for status in (403, 404, 500):
+                with self.subTest(stage=stage, status=status):
+                    parser = self.harness({"songs": [self.song]}, {"data": [{"url": self.audio_url}]})
+                    responses = [FakeResponse({"songs": [self.song]}), FakeResponse({"data": [{"url": self.audio_url}]})]
+                    responses[stage == "playback"].status = status
+                    parser.session.get = Mock(side_effect=responses)
+                    with self.assertRaisesRegex(ParseException, f"HTTP {status}"):
+                        await self.parse_song(parser, self.match)
+                    parser.create_video_content.assert_not_called()

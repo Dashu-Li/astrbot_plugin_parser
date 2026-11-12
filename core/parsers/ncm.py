@@ -1,7 +1,6 @@
 from re import Match
 from typing import ClassVar
-
-from aiohttp import ClientError
+from urllib.parse import urlsplit
 
 from ..config import PluginConfig
 from ..cookie import CookieJar
@@ -41,7 +40,7 @@ class NCMParser(BaseParser):
         # 1. 取歌曲元数据
         async with self.session.get(detail_url, headers=self.headers) as resp:
             if resp.status >= 400:
-                raise ClientError(f"[NCM] 获取歌曲信息失败 HTTP {resp.status}")
+                raise ParseException(f"[NCM] 获取歌曲信息失败 HTTP {resp.status}")
             detail_json = await resp.json()
 
         songs = detail_json.get("songs") if isinstance(detail_json, dict) else None
@@ -68,7 +67,7 @@ class NCMParser(BaseParser):
         # 2. 取播放地址
         async with self.session.get(play_url, headers=self.headers) as resp:
             if resp.status >= 400:
-                raise ClientError(f"[NCM] 获取播放地址失败 HTTP {resp.status}")
+                raise ParseException(f"[NCM] 获取播放地址失败 HTTP {resp.status}")
             play_json = await resp.json()
         play_data = play_json.get("data") if isinstance(play_json, dict) else None
         if (
@@ -78,9 +77,17 @@ class NCMParser(BaseParser):
         ):
             raise ParseException("[NCM] 未获取到播放地址，歌曲可能已下架或需要登录/会员权限")
         audio_url = play_data[0].get("url")
-        if not isinstance(audio_url, str) or not audio_url.startswith(
-            ("https://", "http://")
-        ):
+        try:
+            parsed_url = urlsplit(audio_url) if isinstance(audio_url, str) else None
+            valid_url = bool(
+                parsed_url and parsed_url.scheme in ("http", "https")
+                and parsed_url.hostname and parsed_url.port != 0
+                and parsed_url.username is None and parsed_url.password is None
+                and not any(char.isspace() or ord(char) < 32 for char in audio_url)
+            )
+        except ValueError:
+            valid_url = False
+        if not valid_url:
             raise ParseException("[NCM] 未获取到播放地址，歌曲可能已下架或需要登录/会员权限")
 
         # 3. 组装结果
