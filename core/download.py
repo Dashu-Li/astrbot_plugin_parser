@@ -110,11 +110,11 @@ class Downloader:
                     max_bytes = self.max_size * 1024 * 1024
 
                     if content_length == 0:
-                        logger.warning(f"媒体 url: {url}, 大小为 0, 取消下载")
+                        logger.warning("媒体大小为 0, 取消下载")
                         raise ZeroSizeException
                     if content_length and content_length > max_bytes:
                         logger.warning(
-                            f"媒体 url: {url} 大小 {content_length / 1024 / 1024:.2f} MB 超过 {self.max_size} MB, 取消下载"
+                            f"媒体大小 {content_length / 1024 / 1024:.2f} MB 超过 {self.max_size} MB, 取消下载"
                         )
                         raise SizeLimitException
 
@@ -131,7 +131,7 @@ class Downloader:
                                 bar.update(len(chunk))
 
                     if downloaded == 0:
-                        logger.warning(f"媒体 url: {url}, 实际大小为 0, 取消下载")
+                        logger.warning("媒体实际大小为 0, 取消下载")
                         raise ZeroSizeException
                     if content_length and downloaded < content_length:
                         raise ClientError(
@@ -150,7 +150,7 @@ class Downloader:
                 if attempt < retries:
                     await sleep(1 + attempt)
                     continue
-                logger.exception(f"下载失败 | url: {url}, file_path: {file_path}")
+                logger.warning(f"媒体下载失败 ({type(exc).__name__})")
                 raise DownloadException("媒体下载失败") from exc
         raise DownloadException("媒体下载失败")
 

@@ -95,6 +95,22 @@ class DownloadRetryTests(unittest.IsolatedAsyncioTestCase):
         self.sleep.assert_not_awaited()
         self.assertEqual(self.cfg.download_retry_times, 2)
 
+    async def test_failure_logs_omit_signed_url_and_exception_details(self):
+        marker = "synthetic-private-signed-token"
+        url = f"https://cdn.example.invalid/media?token={marker}"
+        class SignedFailure(FailedResponse):
+            async def __aenter__(self):
+                raise download.ClientError(url)
+
+        self.client.get.return_value = SignedFailure()
+        with self.assertRaises(download.DownloadException):
+            await self.downloader.streamd(url, file_name="private.mp4", retry_times=0)
+        rendered = str(download.logger.mock_calls)
+        self.assertNotIn(marker, rendered)
+        self.assertNotIn("https://", rendered)
+        self.assertIn("ClientError", rendered)
+        download.logger.exception.assert_not_called()
+
     async def test_cancel_after_first_written_chunk_removes_partial_file(self):
         response = PartialResponse()
         self.client.get.return_value = response
