@@ -257,9 +257,27 @@ class RenderFailureLogTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(render_module.logger, "error") as log:
             self.assertIsNone(await renderer.render_card(result))
         rendered = str(log.call_args_list)
-        self.assertIn("RuntimeError", rendered)
+        self.assertIn("RuntimeError", log.call_args.args[0])
         self.assertNotIn(PRIVATE_MARKER, rendered)
         self.assertNotIn("https://", rendered)
+
+
+class PublicSendContractTests(unittest.IsolatedAsyncioTestCase):
+    async def test_public_send_returns_real_bool_for_delivery_reports(self):
+        from astrbot_plugin_parser.main import ParserPlugin
+
+        for sent_count, expected in ((0, False), (1, True)):
+            with self.subTest(sent_count=sent_count):
+                result = object()
+                event = object()
+                report = DeliveryReport(sent_count=sent_count)
+                plugin = SimpleNamespace(
+                    parse_url=AsyncMock(return_value=result),
+                    sender=SimpleNamespace(send_parse_result=AsyncMock(return_value=report)),
+                )
+                actual = await ParserPlugin.parse_and_send(plugin, event, "https://example.invalid/fixture")
+                self.assertIs(actual, expected)
+                plugin.sender.send_parse_result.assert_awaited_once_with(event, result)
 
 
 if __name__ == "__main__":

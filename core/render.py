@@ -431,7 +431,7 @@ class Renderer:
                 await fp.write(buf.getvalue())
             return cache
         except Exception as exc:
-            logger.error("Failed to render card (%s)", type(exc).__name__)
+            logger.error(f"Failed to render card ({type(exc).__name__})")
             return None
 
     @suppress_exception
